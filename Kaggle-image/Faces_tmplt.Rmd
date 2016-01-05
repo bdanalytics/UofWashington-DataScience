@@ -134,7 +134,8 @@ require(dplyr)
 
 # Analysis control global variables
 # Inputs
-#   url/name = "<pointer>"; sep = choose from c(NULL, "\t")
+#   url/name = "<pointer>"; if url specifies a zip file, name = "<filename>
+#   sep = choose from c(NULL, "\t")
 glbObsTrnFile <- list(url = "https://www.kaggle.com/c/facial-keypoints-detection/download/training.zip",
                         name = "training/training.csv") 
 
@@ -143,6 +144,7 @@ glbObsNewFile <- list(url = "https://www.kaggle.com/c/facial-keypoints-detection
     #list(splitSpecs = list(method = NULL #select from c(NULL, "condition", "sample", "copy")
     #                      ,nRatio = 0.3 # > 0 && < 1 if method == "sample" 
     #                      ,seed = 123 # any integer or glbObsTrnPartitionSeed if method == "sample" 
+    #                      ,condition = # or 'is.na(<var>)'; '<var> <condition_operator> <value>'    
     #                      )
     #    )                   
 
@@ -150,7 +152,7 @@ glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
 glb_is_separate_newobs_dataset <- TRUE    # or TRUE
-    glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for     glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
+    glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for glbObsNewFile$splitSpecs$method # select from c(FALSE, TRUE)
 
 glbObsDropCondition <- #NULL # : default
 #   enclose in single-quotes b/c condition might include double qoutes
@@ -271,6 +273,8 @@ glbFeatsDerive <- list();
 # glbFeatsDerive[["<feat.my.sfx>"]] <- list(
 #     mapfn = function(<arg1>, <arg2>) { return(function(<arg1>, <arg2>)) } 
 #   , args = c("<arg1>", "<arg2>"))
+#myprint_df(data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos)))
+#data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos))[7045:7055, ]
 
     # character
 #     mapfn = function(Week) { return(substr(Week, 1, 10)) }
@@ -359,6 +363,10 @@ glbFeatsDerive[["ImageId"]] <- list(
 #                  return(spdiff <- (10 ^ startprice.log10.predict) - startprice) } 
 #     mapfn = function(productline, description) { as.factor(
 #         paste(gsub(" ", "", productline), as.numeric(nchar(description) > 0), sep = "*")) }
+#     mapfn = function(.src, .pos) { 
+#         return(paste(.src, sprintf("%04d", 
+#                                    ifelse(.src == "Train", .pos, .pos - 7049)
+#                                    ), sep = "#")) }       
 
 # # If glbObsAll is not sorted in the desired manner
 #     mapfn=function(Week) { return(coredata(lag(zoo(orderBy(~Week, glbObsAll)$ILI), -2, na.pad=TRUE))) }
@@ -755,6 +763,7 @@ glbMdlFamilies[["Final"]] <- c(NULL) # NULL vector acceptable
 
 glbMdlAllowParallel <- list()
 #glbMdlAllowParallel[["<mdlId>"]] <- FALSE
+glbMdlAllowParallel[["All.X##rcv#glm"]] <- FALSE
 
 # Check if tuning parameters make fit better; make it mdlFamily customizable ?
 glbMdlTuneParams <- data.frame()
@@ -3240,6 +3249,10 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r partition.data.training, cache=FALSE, echo=FALSE}
+startTm = proc.time()["elapsed"]
+print(sprintf("partition.data.training chunk: setup: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - startTm))
+
 if (all(is.na(glbObsNew[, glb_rsp_var]))) {
     set.seed(glbObsTrnPartitionSeed)
     OOB_size <- nrow(glbObsNew) * 1.1
@@ -3252,25 +3265,37 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         glbObsFit <- glbObsTrn[!split, ] 
     } else {
         sample_vars <- c(glbFeatsCategory, glb_rsp_var_raw)
-        rspvar_freq_df <- orderBy(reformulate(glb_rsp_var_raw), 
-                                 mycreate_sqlxtab_df(glbObsTrn, glb_rsp_var_raw))
+        tmpObsTrn <- glbObsTrn[, sample_vars, FALSE]
+        tmpObsNew <- glbObsNew[, sample_vars, FALSE]        
+        if (!all(is.na(tmpObsNew[, glb_rsp_var_raw])))
+            stop("Not implemeted yet...")
+        if (length(unqValsRspVar <- unique(tmpObsTrn[ ,glb_rsp_var_raw])) > 10) {
+            if (!is.numeric(unqValsRspVar))
+                stop("Not implemented yet...")
+            rspGrpVar <- paste0(glb_rsp_var_raw, ".cut.fctr")
+            tmpObsTrn[, rspGrpVar] <- cut(tmpObsTrn[, glb_rsp_var_raw], 
+                                          breaks = as.numeric(summary(tmpObsTrn[, glb_rsp_var_raw])))
+        } else rspGrpVar <- glb_rsp_var_raw
+        
+        rspvar_freq_df <- orderBy(reformulate(rspGrpVar), 
+                                 mycreate_sqlxtab_df(tmpObsTrn, rspGrpVar))
         OOB_rspvar_size <- 
             1.0 * OOB_size * rspvar_freq_df$.n / sum(rspvar_freq_df$.n) 
-        names(OOB_rspvar_size) <- as.character(rspvar_freq_df[, glb_rsp_var_raw])
+        names(OOB_rspvar_size) <- as.character(rspvar_freq_df[, rspGrpVar])
         newobs_freq_df <- orderBy(reformulate(glbFeatsCategory),
-                                mycreate_sqlxtab_df(glbObsNew, glbFeatsCategory))
+                                mycreate_sqlxtab_df(tmpObsNew, glbFeatsCategory))
         trnobs_freq_df <- orderBy(reformulate(glbFeatsCategory),
-                                mycreate_sqlxtab_df(glbObsTrn, glbFeatsCategory))
+                                mycreate_sqlxtab_df(tmpObsTrn, glbFeatsCategory))
         ctgry_freq_df <- merge(newobs_freq_df, trnobs_freq_df, 
                                 by = glbFeatsCategory,
                                 all = TRUE, sort = TRUE, 
                                 suffixes = c(".tst", ".trn"))
         ctgry_freq_df[is.na(ctgry_freq_df)] <- 0
         
-        obs_freq_df <- mycreate_xtab_df(glbObsTrn, 
-                                        c(glbFeatsCategory, glb_rsp_var_raw))
+        obs_freq_df <- mycreate_xtab_df(tmpObsTrn, 
+                                        c(glbFeatsCategory, rspGrpVar))
         newobs_freq_df <- orderBy(reformulate(glbFeatsCategory),
-                                mycreate_sqlxtab_df(glbObsNew, glbFeatsCategory))
+                                mycreate_sqlxtab_df(tmpObsNew, glbFeatsCategory))
         names(newobs_freq_df) <- gsub(".n", ".n.tst", names(newobs_freq_df), 
                                       fixed = TRUE)
         obs_freq_df <- merge(obs_freq_df, newobs_freq_df, all = TRUE)
@@ -3281,9 +3306,13 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
 #         dimnames(strata_mtrx)[[2]] <- 
 #             as.character(rspvar_freq_df[, glb_rsp_var_raw])
         dimnames(strata_mtrx) <- list(obs_freq_df[, glbFeatsCategory], 
-                                        as.character(rspvar_freq_df[, glb_rsp_var_raw]))
-        for (val in rspvar_freq_df[, glb_rsp_var_raw]) {
-            trn <- paste0(glb_rsp_var_raw, ".", as.character(val))
+                                        as.character(rspvar_freq_df[, rspGrpVar]))
+        
+        print(sprintf("partition.data.training chunk: strata_mtrx complete: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - startTm))
+
+        for (val in rspvar_freq_df[, rspGrpVar]) {
+            trn <- paste0(rspGrpVar, ".", as.character(val))
             strata <- paste0(".strata.", as.character(val))            
             obs_freq_df[, strata] <- strata_mtrx[, as.character(val)]
             
@@ -3303,16 +3332,20 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
                 obs_freq_df[ix, strata] <- 1
         }    
         #print(colSums(obs_freq_df[, -1]))
-        #glbObsFrq <- obs_freq_df
+        #tmpObsFrq <- obs_freq_df
     
-        
+        print(sprintf("partition.data.training chunk: obs_freq_df complete: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - startTm))
+
         OOB_strata_size <- as.vector(as.matrix(obs_freq_df[, 
                                     grepl("^\\.strata\\.", names(obs_freq_df))]))
-        tmp_trnobs_df <- orderBy(reformulate(c(glb_rsp_var_raw, glbFeatsCategory)),
-                                glbObsTrn)
+        tmp_trnobs_df <- glbObsTrn
+        if (rspGrpVar != glb_rsp_var_raw) 
+            tmp_trnobs_df[, rspGrpVar] = tmpObsTrn[, rspGrpVar]
+        tmp_trnobs_df <- orderBy(reformulate(c(rspGrpVar, glbFeatsCategory)), tmp_trnobs_df)
         require(sampling)
         split_strata <- sampling::strata(tmp_trnobs_df, 
-                               stratanames = c(glb_rsp_var_raw, glbFeatsCategory),
+                               stratanames = c(rspGrpVar, glbFeatsCategory),
                                size = OOB_strata_size[!is.na(OOB_strata_size)],
                                method = "srswor")
         glbObsOOB <- getdata(tmp_trnobs_df, split_strata)[, names(glbObsTrn)]
@@ -3324,6 +3357,9 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
                   glb_rsp_var))
     glbObsFit <- glbObsTrn; glbObsOOB <- glbObsNew
 }
+
+print(sprintf("partition.data.training chunk: Fit/OOB partition complete: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - startTm))
 
 if (!is.null(glb_max_fitobs) && (nrow(glbObsFit) > glb_max_fitobs)) {
     warning("glbObsFit restricted to glb_max_fitobs: ", 
@@ -3408,8 +3444,9 @@ if (glb_save_envir)
          file=paste0(glb_out_pfx, "blddfs_dsk.RData"))
 # load(paste0(glb_out_pfx, "blddfs_dsk.RData"))
 
-rm(split)
 
+print(sprintf("partition.data.training chunk: teardown: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - startTm))
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "select.features", major.inc = TRUE)
 ```
 
