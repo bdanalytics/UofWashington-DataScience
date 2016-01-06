@@ -221,16 +221,12 @@ if ((glb_rsp_var != glb_rsp_var_raw) && is.null(glb_map_rsp_raw_to_var))
 # currently does not handle more than 1 column; consider concatenating multiple columns
 # If glbFeatsId == NULL, ".rownames <- as.numeric(row.names())" is the default
 glbFeatsId <- "ImageId" # choose from c(NULL : default, "<id_feat>") 
-glbFeatsCategory <- NULL # choose from c(NULL : default, "<category_feat>")
+glbFeatsCategory <- "Image.pxl.1.dgt.1" # choose from c(NULL : default, "<category_feat>")
 
 # User-specified exclusions
-glbFeatsExclude <- c(NULL
-#   Feats that shd be excluded due to known causation by prediction variable
-# , "<feat1", "<feat2>"
-#   Feats that are linear combinations (alias in glm)
-#   Feature-engineering phase -> start by excluding all features except id & category & work each one in
-    # ,"left_eye_center_x"
-    ,"left_eye_center_y"        
+glbFeatsExcludeLcl <- c(NULL
+#   Required outputs
+    ,"left_eye_center_x",         "left_eye_center_y"        
     ,"right_eye_center_x",        "right_eye_center_y"
     ,"left_eye_inner_corner_x",   "left_eye_inner_corner_y"  
     ,"left_eye_outer_corner_x",   "left_eye_outer_corner_y"  
@@ -245,7 +241,14 @@ glbFeatsExclude <- c(NULL
     ,"mouth_right_corner_x",      "mouth_right_corner_y"     
     ,"mouth_center_top_lip_x",    "mouth_center_top_lip_y"   
     ,"mouth_center_bottom_lip_x", "mouth_center_bottom_lip_y"
-    ,"Image"
+                    ) 
+glbFeatsExclude <- c(NULL
+#   Feats that shd be excluded due to known causation by prediction variable
+# , "<feat1", "<feat2>"
+#   Feats that are linear combinations (alias in glm)
+#   Feature-engineering phase -> start by excluding all features except id & category & work each one in
+    ,setdiff(glbFeatsExcludeLcl, glb_rsp_var_raw)
+    ,"Image","Image.pxl.1.dgt.1"
                     ) 
 if (glb_rsp_var_raw != glb_rsp_var)
     glbFeatsExclude <- union(glbFeatsExclude, glb_rsp_var_raw)                    
@@ -255,7 +258,7 @@ glbFeatsInteractionOnly <- list()
 
 glbFeatsDrop <- c(NULL
                 # , "<feat1>", "<feat2>"
-                ,"Image"
+                # ,"Image"
                 )
 
 glb_map_vars <- NULL # or c("<var1>", "<var2>")
@@ -320,6 +323,12 @@ glbFeatsDerive[["ImageId"]] <- list(
     , args = c(".src", ".pos")) 
 #myprint_df(data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos)))
 #data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos))[7045:7055, ]
+
+glbFeatsDerive[["Image.pxl.1.dgt.1"]] <- list(
+#     mapfn = function(Image) { return(cut(as.integer(sapply(Image, function(img) strsplit(img, " ")[[1]][1])),
+#                                          breaks = 5)) }       
+    mapfn = function(Image) { return(substr(Image, 1, 1)) }       
+    , args = c("Image"))    
 
 # Add logs of numerics that are not distributed normally
 #   Derive & keep multiple transformations of the same feature, if normality is hard to achieve with just one transformation
@@ -910,20 +919,27 @@ glb_dsp_cols <- c(glbFeatsId, glbFeatsCategory, glb_rsp_var
                   )
 
 # Output specs
+glbObsOut <- list(
+                    # glbFeatsId will be the first output column, by default
+                    vars = list()
+                  )
 glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
 glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
-glb_out_vars_lst <- list()
-# glbFeatsId will be the first output column, by default
 
 if (glb_is_classification && glb_is_binomial) {
-    glb_out_vars_lst[["Probability1"]] <- 
-        "%<d-% mygetPredictIds(glb_rsp_var, glb_fin_mdl_id)$prob" 
+    glbObsOut$vars[["Probability1"]] <- 
+        "%<d-% glbObsNew[, mygetPredictIds(glb_rsp_var, glb_fin_mdl_id)$prob]" 
 } else {
-    glb_out_vars_lst[[glb_rsp_var]] <- 
-        "%<d-% mygetPredictIds(glb_rsp_var, glb_fin_mdl_id)$value"
+    glbObsOut$vars[[glbFeatsId]] <- 
+        "%<d-% as.integer(gsub('Test#', '', glbObsNew[, glbFeatsId]))"
+    glbObsOut$vars[[glb_rsp_var]] <- 
+        "%<d-% glbObsNew[, mygetPredictIds(glb_rsp_var, glb_fin_mdl_id)$value]"
+    for (outVar in setdiff(glbFeatsExcludeLcl, glb_rsp_var_raw))
+        glbObsOut$vars[[outVar]] <- 
+            paste0("%<d-% mean(glbObsAll[, \"", outVar, "\"], na.rm = TRUE)")
 }    
-# glb_out_vars_lst[[glb_rsp_var_raw]] <- glb_rsp_var_raw
-# glb_out_vars_lst[[paste0(head(unlist(strsplit(mygetPredictIds$value, "")), -1), collapse = "")]] <-
+# glbObsOut$vars[[glb_rsp_var_raw]] <- glb_rsp_var_raw
+# glbObsOut$vars[[paste0(head(unlist(strsplit(mygetPredictIds$value, "")), -1), collapse = "")]] <-
 
 glbOutStackFnames <- NULL #: default
     # c("ebayipads_txt_assoc1_out_bid1_stack.csv") # manual stack
@@ -5071,9 +5087,10 @@ glbObsTrn <- glb_get_predictions(df = glbObsTrn, mdl_id = glb_fin_mdl_id,
                                      rsp_var = glb_rsp_var,
                                     prob_threshold_def = prob_threshold)
 
+#stop("here"); glb2Sav(); all.equal(glb_featsimp_df, sav_featsimp_df)
 glb_featsimp_df <- myget_feats_importance(mdl=glb_fin_mdl,
                                           featsimp_df=glb_featsimp_df)
-glb_featsimp_df[, paste0(glb_fin_mdl_id, ".imp")] <- glb_featsimp_df$imp
+#glb_featsimp_df[, paste0(glb_fin_mdl_id, ".imp")] <- glb_featsimp_df$imp
 print(glb_featsimp_df)
 if (glb_is_classification && glb_is_binomial)
     glb_analytics_diag_plots(obs_df=glbObsTrn, mdl_id=glb_fin_mdl_id, 
@@ -5150,11 +5167,11 @@ if (is.null(glb_out_obs)) obs_df <- glbObsNew else
 
 require(stringr)
 obsout_df <- obs_df[, glbFeatsId, FALSE]
-for (clmn in names(glb_out_vars_lst))
-    if (!grepl("^%<d-%", glb_out_vars_lst[[clmn]]))
-        obsout_df[, clmn] <- obs_df[, glb_out_vars_lst[[clmn]]] else {
-            feat <- str_trim(unlist(strsplit(glb_out_vars_lst[[clmn]], "%<d-%"))[2])
-            obsout_df[, clmn] <- obs_df[, eval(parse(text = feat))]
+for (clmn in names(glbObsOut$vars))
+    if (!grepl("^%<d-%", glbObsOut$vars[[clmn]]))
+        obsout_df[, clmn] <- obs_df[, glbObsOut$vars[[clmn]]] else {
+            feat <- str_trim(unlist(strsplit(glbObsOut$vars[[clmn]], "%<d-%"))[2])
+            obsout_df[, clmn] <- eval(parse(text = feat))
     }        
 
 if (glb_is_classification) {
@@ -5356,8 +5373,16 @@ if (!is.null(glbOutStackFnames)) {
     }
 }
 
+require(tidyr)
+smpout_df <- read.csv('data/IdLookupTable.csv')
+tmpout_df <- obsout_df %>% 
+                tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
+                merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
+                select(matches("(RowId|Location)"))
+tmpout_df <- orderBy(~RowId, tmpout_df[, c("RowId", "Location")])
+
 out_fname <- paste0(glb_out_pfx, "out.csv")
-write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
+write.csv(tmpout_df, out_fname, quote = FALSE, row.names = FALSE)
 #cat(" ", "\n", file=submit_fn, append=TRUE)
 
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("id", 
@@ -5422,29 +5447,23 @@ if (!is.null(glbFeatsCategory)) {
     
     clmnOrder <- sort(setdiff(names(glbLvlCategory), glbFeatsCategory))
     names(clmnOrder) <- gsub("^err\\.abs\\.(.{3})\\.(.+)", "err\\.abs\\.\\2\\.\\1", clmnOrder)
-    clmnOrder <- clmnOrder[sort(names(clmnOrder))]
-    glbLvlCategory <- glbLvlCategory[, c(glbFeatsCategory, clmnOrder)]
+    clmnOrder <- data.frame(metric = clmnOrder[sort(names(clmnOrder))])
+    clmnOrder[, "order"] <- 1:nrow(clmnOrder)
+    clmnOrder[, "prefer"] <- sapply(gsub("(.+)(Fit|fit|OOB|trn|new|Tst)\\.sum", "\\2", clmnOrder$metric),
+                                    function(pttrn) switch(pttrn,
+                                                           Fit = 1,
+                                                           fit = 1,
+                                                           OOB = 2,
+                                                           trn = 3,
+                                                           new = 4,
+                                                                 5))
+    clmnOrder <- dplyr::arrange(clmnOrder, prefer, order)
+    glbLvlCategory <- glbLvlCategory[, c(glbFeatsCategory, clmnOrder$metric)]
     if (any(grepl("OOB", glbMdlMetricsEval)))
         print(orderBy(~-err.abs.OOB.mean, glbLvlCategory[, -1])) else
             print(orderBy(~-err.abs.fit.mean, glbLvlCategory[, -1]))
     print(colSums(glbLvlCategory[, -grep(glbFeatsCategory,
                                          names(glbLvlCategory))]))
-    
-    glbLvlCategory <- merge(glbLvlCategory, 
-    myget_category_stats(obs_df = glbObsNew, mdl_id = glb_fin_mdl_id,
-                             label = "new"),
-                          by = glbFeatsCategory, all = TRUE)
-    row.names(glbLvlCategory) <- glbLvlCategory[, glbFeatsCategory]
-    
-    clmnOrder <- sort(setdiff(names(glbLvlCategory), glbFeatsCategory))
-    names(clmnOrder) <- gsub("^err\\.abs\\.(.{3})\\.(.+)", "err\\.abs\\.\\2\\.\\1", clmnOrder)
-    clmnOrder <- clmnOrder[sort(names(clmnOrder))]
-    glbLvlCategory <- glbLvlCategory[, c(glbFeatsCategory, clmnOrder)]
-    if (any(grepl("OOB", glbMdlMetricsEval)))
-        print(orderBy(~-err.abs.OOB.mean, glbLvlCategory[, -1])) else
-        print(orderBy(~-err.abs.fit.mean, glbLvlCategory[, -1]))
-    print(colSums(glbLvlCategory[, -grep(glbFeatsCategory,
-                                       names(glbLvlCategory))]))
 }
 
 if ((glb_rsp_var %in% names(glbObsNew)) &&
@@ -5468,11 +5487,12 @@ if ((glb_rsp_var %in% names(glbObsNew)) &&
     }    
 }    
 
+print("Features Importance for selected models:")
 tmpFeatsImp <- subset(glb_featsimp_df, select = -imp)
-names(tmpFeatsImp) <- gsub("#", "_", names(tmpFeatsImp))
+# names(tmpFeatsImp) <- gsub("#", "_", names(tmpFeatsImp))
 tmpFeatsImp[, "imp.max"] <- sapply(1:nrow(tmpFeatsImp), function(rowIx)
                                 max(as.numeric(tmpFeatsImp[rowIx, ]), na.rm = TRUE))
-print(orderBy(as.formula(paste0("~ -", gsub("#", "_", glb_sel_mdl_id), ".imp")), 
+print(orderBy(as.formula(paste0("~ -", gsub("#", ".", glb_sel_mdl_id), ".imp")), 
               subset(tmpFeatsImp, imp.max > 10, select = -imp.max)))
 
 dsp_myCategory_conf_mtrx <- function(myCategory) {
@@ -5506,21 +5526,6 @@ dsp_myCategory_conf_mtrx <- function(myCategory) {
                   nrow(OOB_FPerr_df)))
     print(OOB_FPerr_df)
 }
-#dsp_myCategory_conf_mtrx(myCategory="OpEd#Opinion#")
-#dsp_myCategory_conf_mtrx(myCategory="Business#Business Day#Dealbook")
-#dsp_myCategory_conf_mtrx(myCategory="##")
-
-# if (glb_is_classification) {
-#     print("FN_OOB_ids:")
-#     print(glbObsOOB[glbObsOOB$UniqueID %in% FN_OOB_ids, 
-#                         grep(glb_rsp_var, names(glbObsOOB), value=TRUE)])
-#     print(glbObsOOB[glbObsOOB$UniqueID %in% FN_OOB_ids, 
-#                         glbFeatsText])
-#     print(dsp_vctr <- colSums(glbObsOOB[glbObsOOB$UniqueID %in% FN_OOB_ids, 
-#                         setdiff(grep("[HSA].", names(glbObsOOB), value=TRUE),
-#                                 union(myfind_chr_cols_df(glbObsOOB),
-#                     grep(".fctr", names(glbObsOOB), fixed=TRUE, value=TRUE)))]))
-# }
 
 print("glbObsNew prediction stats:")
 if (glb_is_regression)
