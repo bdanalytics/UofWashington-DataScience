@@ -134,7 +134,7 @@ require(dplyr)
 
 # Analysis control global variables
 # Inputs
-#   url/name = "<pointer>"; if url specifies a zip file, name = "<filename>
+#   url/name = "<pointer>"; if url specifies a zip file, name = "<filename>"
 #   sep = choose from c(NULL, "\t")
 glbObsTrnFile <- list(url = "https://www.kaggle.com/c/facial-keypoints-detection/download/training.zip",
                         name = "training/training.csv") 
@@ -248,7 +248,7 @@ glbFeatsExclude <- c(NULL
 #   Feats that are linear combinations (alias in glm)
 #   Feature-engineering phase -> start by excluding all features except id & category & work each one in
     ,setdiff(glbFeatsExcludeLcl, glb_rsp_var_raw)
-    ,"Image","Image.pxl.1.dgt.1"
+    ,"Image.pxl.1.dgt.1"
                     ) 
 if (glb_rsp_var_raw != glb_rsp_var)
     glbFeatsExclude <- union(glbFeatsExclude, glb_rsp_var_raw)                    
@@ -258,7 +258,6 @@ glbFeatsInteractionOnly <- list()
 
 glbFeatsDrop <- c(NULL
                 # , "<feat1>", "<feat2>"
-                # ,"Image"
                 )
 
 glb_map_vars <- NULL # or c("<var1>", "<var2>")
@@ -395,6 +394,8 @@ glbFeatsDateTime <- list()
 #       last.ctg = TRUE, poly.ctg = TRUE)
 
 glbFeatsPrice <- NULL # or c("<price_var>")
+
+glbFeatsImage <- list(Image = list())
 
 glbFeatsText <- list()
 Sys.setlocale("LC_ALL", "C") # For english
@@ -919,9 +920,18 @@ glb_dsp_cols <- c(glbFeatsId, glbFeatsCategory, glb_rsp_var
                   )
 
 # Output specs
-glbObsOut <- list(
-                    # glbFeatsId will be the first output column, by default
-                    vars = list()
+glbObsOut <- list(NULL
+        # glbFeatsId will be the first output column, by default
+        ,vars = list()
+        ,mapFn = function(obsout_df) {
+                    require(tidyr)
+                    smpout_df <- read.csv('data/IdLookupTable.csv')
+                    tmpout_df <- obsout_df %>% 
+                                    tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
+                                    merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
+                                    select(matches("(RowId|Location)"))
+                    return(tmpout_df <- orderBy(~RowId, tmpout_df[, c("RowId", "Location")]))
+                }
                   )
 glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
 glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
@@ -1128,7 +1138,7 @@ if ((glbObsNewFile$splitSpecs$method != "copy") &&
 }
 glbFeatsExclude <- union(glbFeatsExclude, glbFeatsId)
 
-glbObsAll <- orderBy(reformulate(glbFeatsId), glbObsAll)
+glbObsAll <- dplyr::arrange(glbObsAll, .pos)
 glbObsTrn <- glbObsNew <- NULL
 
 # For Tableau
@@ -1596,37 +1606,6 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features", major.inc = TRUE
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r extract.features, cache=FALSE, echo=FALSE}
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.string", major.inc = FALSE)
-```
-
-### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.string, cache=FALSE, echo=FALSE}
-extract.features.string.chunk.df <- myadd_chunk(NULL, "extract.features.string.bgn")
-
-# Create dummy category if glbFeatsCategory is NULL
-if (is.null(glbFeatsCategory)) {
-    glbFeatsCategory <- ".category"
-    glbObsAll[, glbFeatsCategory] <- as.factor(".dummy")
-    glbFeatsExclude <- union(glbFeatsExclude, glbFeatsCategory)
-}
-
-#   Create factors of string variables excl. dates/times since they come in as chars
-extract.features.string.chunk.df <- myadd_chunk(extract.features.string.chunk.df, 
-            paste0("extract.features.string", "factorize.str.vars"), major.inc = TRUE)
-
-#stop(here"); savObsAll <- glbObsAll; #glbObsAll <- savObsAll
-print(str_vars <- myfind_chr_cols_df(glbObsAll))
-if (length(str_vars <- setdiff(str_vars, 
-                               c(glbFeatsExclude, glbFeatsDateTime, names(glbFeatsText)))) > 0) {
-    for (var in str_vars) {
-        warning("Creating factors of string variable: ", var, 
-                ": # of unique values: ", length(unique(glbObsAll[, var])))
-        glbObsAll[, paste0(var, ".fctr")] <- 
-            relevel(factor(glbObsAll[, var]),
-                    names(which.max(table(glbObsAll[, var], useNA = "ifany"))))
-    }
-    glbFeatsExclude <- union(glbFeatsExclude, str_vars)
-}
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.datetime", major.inc = FALSE)
 ```
 
@@ -1751,6 +1730,54 @@ if (length(glbFeatsDateTime) > 0) {
 }
 #rm(last1, last10, last100)
 
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.image", major.inc = FALSE)
+```
+
+### Step ``r mydsp_chunk(glb_chunks_df)``
+```{r extract.features.image, cache=FALSE, echo=FALSE, fig.height=5, fig.width=5}
+extract.features.image.chunk.df <- myadd_chunk(NULL, "extract.features.image.bgn")
+
+if (length(names(glbFeatsImage)) > 0) {
+    for (feat in names(glbFeatsImage)) {
+        extract.features.image.chunk.df <- 
+            myadd_chunk(extract.features.image.chunk.df, paste0("extract.features.image", ".", feat, ".bgn"), 
+                        major.inc = TRUE)
+        
+        glbFeatsImage[[feat]]$imgMtrx <- 
+            foreach(obsIx = 1:nrow(glbObsAll), .combine = rbind) %dopar% {
+            # foreach(obsIx = 1:5, .combine = rbind) %dopar% {
+                as.integer(unlist(strsplit(glbObsAll[obsIx, feat], " ")))
+            }
+
+        extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
+                                                    paste0("extract.features.image", ".", feat, ".display"), 
+                                                        major.inc = TRUE)
+        
+        for (src in unique(glbObsAll$.src)) {
+            print(sprintf("    Sample images from %s:%s", src, feat))
+            # glbObsAll is sorted by .src rather than .pos
+            # smpl <- sample(glbObsAll[glbObsAll$.src == src, ".pos"], 5)
+            smpl <- 1:nrow(glbObsAll)
+            smpl <- sample(smpl[glbObsAll$.src == src], 5)
+            for (obsIx in smpl) {
+                print(sprintf("        obsIx:%d:", obsIx))
+                print(glbObsAll[obsIx, glb_dsp_cols])
+                image(1:96, 1:96, 
+                            matrix(data = rev(glbFeatsImage[[feat]]$imgMtrx[obsIx, ]), nrow = 96, ncol = 96),
+                            col = gray((0:255)/255))
+                points(96 - glbObsAll[obsIx, glb_rsp_var_raw],  
+                       96 - glbObsAll[obsIx, "left_eye_center_y"],  
+                       col = "blue")
+            }    
+        }
+    }
+    
+    glbObsAll <- glbObsAll[, setdiff(names(glbObsAll), names(glbFeatsImage))]
+    glbFeatsExclude <- union(glbFeatsExclude, names(glbFeatsImage))
+}
+
+myadd_chunk(extract.features.image.chunk.df, paste0("extract.features.image", ".end"), 
+                    major.inc = TRUE)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.price", major.inc = FALSE)
 ```
 
@@ -2923,6 +2950,38 @@ mytokenize3grams <- content_transformer(function(x) {
                     major.inc = TRUE)
 }
 
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.string", major.inc = FALSE)
+```
+
+### Step ``r mydsp_chunk(glb_chunks_df)``
+```{r extract.features.string, cache=FALSE, echo=FALSE}
+# String extraction should be at the end since many features come in as strings (e.g. datetime, image)
+extract.features.string.chunk.df <- myadd_chunk(NULL, "extract.features.string.bgn")
+
+# Create dummy category if glbFeatsCategory is NULL
+if (is.null(glbFeatsCategory)) {
+    glbFeatsCategory <- ".category"
+    glbObsAll[, glbFeatsCategory] <- as.factor(".dummy")
+    glbFeatsExclude <- union(glbFeatsExclude, glbFeatsCategory)
+}
+
+#   Create factors of string variables excl. dates/times since they come in as chars
+extract.features.string.chunk.df <- myadd_chunk(extract.features.string.chunk.df, 
+            paste0("extract.features.string", "factorize.str.vars"), major.inc = TRUE)
+
+#stop(here"); savObsAll <- glbObsAll; #glbObsAll <- savObsAll
+print(str_vars <- myfind_chr_cols_df(glbObsAll))
+if (length(str_vars <- setdiff(str_vars, 
+                               c(glbFeatsExclude, glbFeatsDateTime, names(glbFeatsText)))) > 0) {
+    for (var in str_vars) {
+        warning("Creating factors of string variable: ", var, 
+                ": # of unique values: ", length(unique(glbObsAll[, var])))
+        glbObsAll[, paste0(var, ".fctr")] <- 
+            relevel(factor(glbObsAll[, var]),
+                    names(which.max(table(glbObsAll[, var], useNA = "ifany"))))
+    }
+    glbFeatsExclude <- union(glbFeatsExclude, str_vars)
+}
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.end", major.inc = FALSE)
 ```
 
@@ -5087,7 +5146,6 @@ glbObsTrn <- glb_get_predictions(df = glbObsTrn, mdl_id = glb_fin_mdl_id,
                                      rsp_var = glb_rsp_var,
                                     prob_threshold_def = prob_threshold)
 
-#stop("here"); glb2Sav(); all.equal(glb_featsimp_df, sav_featsimp_df)
 glb_featsimp_df <- myget_feats_importance(mdl=glb_fin_mdl,
                                           featsimp_df=glb_featsimp_df)
 #glb_featsimp_df[, paste0(glb_fin_mdl_id, ".imp")] <- glb_featsimp_df$imp
@@ -5156,7 +5214,7 @@ for (obsSet in c("trn", "new")) {
     if (obsSet == "new") glbObsNew <- obs_df
 }
 rm(obs_df)
-glbObsAll <- orderBy(reformulate(glbFeatsId), myrbind_df(glbObsTrn, glbObsNew))
+glbObsAll <- dplyr::arrange(myrbind_df(glbObsTrn, glbObsNew), .pos)
 
 glb_analytics_diag_plots(obs_df = glbObsNew, mdl_id = glb_fin_mdl_id, 
                          prob_threshold = prob_threshold_def)
@@ -5373,16 +5431,9 @@ if (!is.null(glbOutStackFnames)) {
     }
 }
 
-require(tidyr)
-smpout_df <- read.csv('data/IdLookupTable.csv')
-tmpout_df <- obsout_df %>% 
-                tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
-                merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
-                select(matches("(RowId|Location)"))
-tmpout_df <- orderBy(~RowId, tmpout_df[, c("RowId", "Location")])
-
+if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df)
 out_fname <- paste0(glb_out_pfx, "out.csv")
-write.csv(tmpout_df, out_fname, quote = FALSE, row.names = FALSE)
+write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
 #cat(" ", "\n", file=submit_fn, append=TRUE)
 
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("id", 
