@@ -934,23 +934,27 @@ glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
                   )
 
 # Output specs
+lclgetfltout_df <- function(obsout_df) {
+    require(tidyr)
+    obsout_df <- obsout_df %>%
+        tidyr::separate("ImageId.x.y", c(".src", ".pos", "x", "y"), 
+                        sep = "#", remove = TRUE, extra = "merge")
+    maxout_df <- obsout_df %>%
+        dplyr::group_by(.pos) %>%
+        dplyr::summarize(maxProb1 = max(Probability1))
+    fltout_df <- merge(maxout_df, obsout_df, 
+                       by.x = c(".pos", "maxProb1"), by.y = c(".pos", "Probability1"),
+                       all.x = TRUE) %>%
+        dplyr::mutate(ImageId = as.integer(.pos)) %>%
+        dplyr::select(ImageId, left_eye_center_x = x, left_eye_center_y = y) 
+    return(fltout_df)
+}
 glbObsOut <- list(NULL
         # glbFeatsId will be the first output column, by default
         ,vars = list()
         ,mapFn = function(obsout_df) {
                     #sav_obsout_df <- obsout_df; all.equal(sav_obsout_df, obsout_df)
-                    require(tidyr)
-                    obsout_df <- obsout_df %>%
-                                    tidyr::separate("ImageId.x.y", c(".src", ".pos", "x", "y"), 
-                                                    sep = "#", remove = TRUE, extra = "merge")
-                    maxout_df <- obsout_df %>%
-                                    dplyr::group_by(.pos) %>%
-                                    dplyr::summarize(maxProb1 = max(Probability1))
-                    fltout_df <- merge(maxout_df, obsout_df, 
-                                       by.x = c(".pos", "maxProb1"), by.y = c(".pos", "Probability1"),
-                                       all.x = TRUE) %>%
-                                    dplyr::mutate(ImageId = as.integer(.pos)) %>%
-                                    dplyr::select(ImageId, left_eye_center_x = x, left_eye_center_y = y) 
+                    fltout_df <- lclgetfltout_df(obsout_df)
                     smpout_df <- read.csv('data/IdLookupTable.csv')
                     curout_df <- fltout_df %>% 
                                     tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
@@ -1010,6 +1014,11 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- "predict.data.new" #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
 #mysavChunk(glbOut$pfx, glbChunks[["last"]])
+
+# Inspect max OOB FP
+#chkObsOOB <- subset(glbObsOOB, !label.fctr.All.X..rcv.glmnet.is.acc)
+#chkObsOOBFP <- subset(chkObsOOB, label.fctr.All.X..rcv.glmnet == "left_eye_center") %>% dplyr::mutate(Probability1 = label.fctr.All.X..rcv.glmnet.prob) %>% select(-.src, -.pos, -x, -y) ", ".pos", "x", "y")) %>% lclgetfltout_df()
+#
 #newImgObs <- glbObsNew[(glbObsNew$ImageId == "Test#0001"), ]; print(newImgObs[which.max(newImgObs$label.fctr.Final..rcv.glmnet.prob), ])
 #OOBImgObs <- glbObsOOB[(glbObsOOB$ImageId == "Train#0003"), ]; print(OOBImgObs[which.max(OOBImgObs$label.fctr.All.X..rcv.glmnet.prob), ])
 

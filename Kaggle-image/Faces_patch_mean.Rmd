@@ -1941,8 +1941,16 @@ if (length(names(glbFeatsImage)) > 0) {
             outObsNew <- 
                 outObs[outObs[, glbFeatsId] %in% glbObsAll[glbObsAll$.src == "Test" , glbFeatsId], ]
             
-            print(myplot_histogram(outObsTrn, "patch.cor") + facet_wrap(~label, scales = "free_y") + 
+            print("outObsTrn patch.cor Distribution:")
+            print(tapply(outObsTrn[, "patch.cor"], outObsTrn[, "label"], summary))
+            print(myplot_violin(outObsTrn, "patch.cor", xcol_name = "label") + 
+                      facet_wrap(~label, scales = "free_y") + 
                       ggtitle(sprintf("%s:%s:outObsTrn", feat, "left_eye_center")))
+#             print(myplot_histogram(outObsTrn, "patch.cor") + facet_wrap(~label, scales = "free_y") + 
+#                       ggtitle(sprintf("%s:%s:outObsTrn\n%s", feat, "left_eye_center",
+#                                 paste(names(summary(outObsTrn[, "patch.cor"])), 
+#                             summary(outObsTrn[outObsTrn$label == "left_eye_center", "patch.cor"]), 
+#                             sep = ":", collapse = "; "))))      
             
             # Plot images with is.na(glbObsTrn$ptFeat) in outObsTrn
             tmpObsTrn <- 
@@ -2005,8 +2013,12 @@ if (length(names(glbFeatsImage)) > 0) {
             
             #savOutObsNew <- outObsNew; all.equal(savOutObsNew, outObsNew)
             outObsNew <- outObsNew[, c(glbFeatsId, "x", "y", "patch.cor")]
-            print(myplot_histogram(outObsNew, "patch.cor") + 
+            print("outObsNew patch.cor Distribution:")
+            print(summary(outObsNew[, "patch.cor"]))
+            print(myplot_violin(outObsNew, "patch.cor") + 
                       ggtitle(sprintf("%s:%s:outObsNew", feat, "left_eye_center")))
+#             print(myplot_histogram(outObsNew, "patch.cor") + 
+#                       ggtitle(sprintf("%s:%s:outObsNew", feat, "left_eye_center")))
             
             selObsNew <- dplyr::group_by(outObsNew, ImageId) %>%
                 dplyr::top_n(1, patch.cor) %>%
