@@ -670,16 +670,16 @@ glbRFESizes <- list()
 glbObsFitOutliers <- list()
 # If outliers.n >= 10; consider concatenation of interaction vars
 # glbObsFitOutliers[["<mdlFamily>"]] <- c(NULL
-    # is.na(.rstudent)
-    # is.na(.dffits)
-    # .hatvalues >= 0.99        
-    # -38,167,642 < minmax(.rstudent) < 49,649,823    
+#     is.na(.rstudent)
+#     is.na(.dffits)
+#     .hatvalues >= 0.99        
+#     -38,167,642 < minmax(.rstudent) < 49,649,823    
 #     , <comma-separated-<glbFeatsId>>
 #                                     )
 glbObsFitOutliers[["All.X"]] <- c(NULL
 #     is.na(.rstudent)
 #     max(.rstudent)
-    ,"Train#1456#72#28"
+    # ,"Train#1456#72#28"
 #     is.na(.dffits)
 #     .hatvalues >= 0.99        
 #     -38,167,642 < minmax(.rstudent) < 49,649,823    
@@ -776,8 +776,8 @@ glbMdlFamilies <- list(); glb_mdl_feats_lst <- list()
 # family: Choose from c("RFE.X", "CSM.X", "All.X", "Best.Interact")
 #   methods: Choose from c(NULL, <method>, glbMdlMethods) 
 #glbMdlFamilies[["RFE.X"]] <- c("glmnet", "glm") # non-NULL vector is mandatory
-glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")  # non-NULL vector is mandatory
-# glbMdlFamilies[["All.X"]] <- c("glmnet")  # non-NULL vector is mandatory
+# glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")  # non-NULL vector is mandatory
+glbMdlFamilies[["All.X"]] <- c("glmnet")  # non-NULL vector is mandatory
 #glbMdlFamilies[["Best.Interact"]] <- "glmnet" # non-NULL vector is mandatory
 
 # Check if interaction features make RFE better
@@ -1032,10 +1032,13 @@ glbChunks[["last"]] <- "predict.data.new" #"extract.features.end" #NULL #default
 
 # Inspect max OOB FP
 #chkObsOOB <- subset(glbObsOOB, !label.fctr.All.X..rcv.glmnet.is.acc)
-#chkObsOOBFP <- subset(chkObsOOB, label.fctr.All.X..rcv.glmnet == "left_eye_center") %>% dplyr::mutate(Probability1 = label.fctr.All.X..rcv.glmnet.prob) %>% select(-.src, -.pos, -x, -y) %>% lclgetfltout_df() %>% mutate(obj.distance = (((as.numeric(x) - left_eye_center_x.int) ^ 2) + ((as.numeric(y) - left_eye_center_y.int) ^ 2)) ^ 0.5) %>% dplyr::top_n(5, obj.distance) %>% head(5)
+#chkObsOOBFP <- subset(chkObsOOB, label.fctr.All.X..rcv.glmnet == "left_eye_center") %>% dplyr::mutate(Probability1 = label.fctr.All.X..rcv.glmnet.prob) %>% select(-.src, -.pos, -x, -y) %>% lclgetfltout_df() %>% mutate(obj.distance = (((as.numeric(x) - left_eye_center_x.int) ^ 2) + ((as.numeric(y) - left_eye_center_y.int) ^ 2)) ^ 0.5) %>% dplyr::top_n(5, obj.distance) %>% dplyr::top_n(5, -patch.cor)
 #
 #newImgObs <- glbObsNew[(glbObsNew$ImageId == "Test#0001"), ]; print(newImgObs[which.max(newImgObs$label.fctr.Final..rcv.glmnet.prob), ])
 #OOBImgObs <- glbObsOOB[(glbObsOOB$ImageId == "Train#0003"), ]; print(OOBImgObs[which.max(OOBImgObs$label.fctr.All.X..rcv.glmnet.prob), ])
+
+#load("Faces_patch_extract.features.end.RData", verbose = TRUE)
+#mygetImage(which(glbObsAll[, glbFeatsId] == "Train#0003"), names(glbFeatsImage)[1], plot = TRUE, featHighlight = c("left_eye_center_x", "left_eye_center_y"), ovrlHighlight = c(66, 35))
 
 # Depict process
 glb_analytics_pn <- petrinet(name = "glb_analytics_pn",
@@ -4395,6 +4398,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 
 ```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
 fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
+# refactor code for outliers / ensure all model runs exclude outliers in this chunk ???
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)
 topindep_var <- NULL; interact_vars <- NULL;

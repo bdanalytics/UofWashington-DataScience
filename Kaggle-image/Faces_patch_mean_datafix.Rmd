@@ -1,6 +1,6 @@
 ---
 # Get YAML keywords from myYAML_ref.Rmd
-title: "Kaggle Facial Points Detection: Univ of Montreal: left_eye_center_x regression:: Faces_patch_mean"
+title: "Kaggle Facial Points Detection: Univ of Montreal: left_eye_center_x regression:: Faces_patch_mean_datafix"
 author: "bdanalytics"
 
 # Choose one:
@@ -325,6 +325,13 @@ glbFeatsDerive[["ImageId"]] <- list(
                                    ), sep = "#"))         
     }       
     , args = c(".src", ".pos")) 
+
+glbFeatsDerive[["left_eye_center_x"]] <- list(
+    mapfn = function(left_eye_center_x) { return(as.integer(left_eye_center_x)) } 
+    , args =  c("left_eye_center_x")) 
+glbFeatsDerive[["left_eye_center_y"]] <- list(
+    mapfn = function(left_eye_center_y) { return(as.integer(left_eye_center_y)) } 
+    , args =  c("left_eye_center_y")) 
 #myprint_df(data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos)))
 #data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos))[7045:7055, ]
 
@@ -960,7 +967,8 @@ glbOutStackFnames <- NULL #: default
     # c("ebayipads_txt_assoc1_out_bid1_stack.csv") # manual stack
     # c("ebayipads_finmdl_bid1_out_nnet_1.csv") # universal stack
 
-glbOut <- list(pfx = "Faces_patch_mean_")
+glbOut <- list(pfx = "Faces_patch_mean_datafix_")
+lclImageSampleSeed <- 129
 glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
 
 
@@ -986,7 +994,16 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- "extract.features.end" #NULL #default: script will save envir at end of this chunk 
-#load("Faces_patch_mean_extract.features.end.RData", verbose = TRUE)
+#mysavChunk(glbOut$pfx, glbChunks[["last"]])
+
+# Inspect max OOB FP
+#chkObsOOB <- subset(glbObsOOB, !label.fctr.All.X..rcv.glmnet.is.acc)
+#chkObsOOBFP <- subset(chkObsOOB, label.fctr.All.X..rcv.glmnet == "left_eye_center") %>% dplyr::mutate(Probability1 = label.fctr.All.X..rcv.glmnet.prob) %>% select(-.src, -.pos, -x, -y) %>% lclgetfltout_df() %>% mutate(obj.distance = (((as.numeric(x) - left_eye_center_x.int) ^ 2) + ((as.numeric(y) - left_eye_center_y.int) ^ 2)) ^ 0.5) %>% dplyr::top_n(5, obj.distance) %>% dplyr::top_n(5, -patch.cor)
+#
+#newImgObs <- glbObsNew[(glbObsNew$ImageId == "Test#0001"), ]; print(newImgObs[which.max(newImgObs$label.fctr.Final..rcv.glmnet.prob), ])
+#OOBImgObs <- glbObsOOB[(glbObsOOB$ImageId == "Train#0003"), ]; print(OOBImgObs[which.max(OOBImgObs$label.fctr.All.X..rcv.glmnet.prob), ])
+
+#load("Faces_patch_mean_datafix_extract.features.end.RData", verbose = TRUE)
 #mygetImage(which(glbObsAll[, glbFeatsId] == "Train#0003"), names(glbFeatsImage)[1], plot = TRUE, featHighlight = c("left_eye_center_x", "left_eye_center_y"), ovrlHighlight = c(66, 35))
 
 # Depict process
@@ -1151,6 +1168,7 @@ for (new_feat in glb_derive_vars) {
     for (arg in glbFeatsDerive[[new_feat]]$args) 
         args_lst[[arg]] <- glbObsAll[, arg]
     glbObsAll[, new_feat] <- do.call(glbFeatsDerive[[new_feat]]$mapfn, args_lst)
+    rm(args_lst)
 }
 
 # Check for duplicates in glbFeatsId
@@ -1766,7 +1784,8 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.image", major.inc 
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.image, cache=FALSE, echo=FALSE, fig.height=5, fig.width=5, eval=myevlChunk(glbChunks, glbOut$pfx)}
+# ```{r extract.features.image, cache=FALSE, echo=FALSE, fig.height=5, fig.width=5, eval=myevlChunk(glbChunks, glbOut$pfx)}
+```{r extract.features.image, cache=FALSE, echo=TRUE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 extract.features.image.chunk.df <- myadd_chunk(NULL, "extract.features.image.bgn")
 
 if (length(names(glbFeatsImage)) > 0) {
@@ -1800,9 +1819,12 @@ if (length(names(glbFeatsImage)) > 0) {
                         mapping = aes(x = x, y = y), color = "blue", shape = 10, size = 5) 
                 }    
                 if (!is.null(ptQry)) {
-                    gp <- gp + geom_point(data = data.frame(
-                        x = 96 - ptQry["x"], y = 96 - ptQry["y"]),  
-                        mapping = aes(x = x, y = y), color = "red", shape = 13, size = 5) 
+                    if (!is.data.frame(ptQry)) ptQry <- as.data.frame(ptQry)
+                    gp <- gp + geom_point(data = ptQry,  
+                        mapping = aes(x = 96 - x, y = 96 - y), color = "red", shape = 13, size = 5) 
+#                     gp <- gp + geom_point(data = data.frame(
+#                         x = 96 - ptQry["x"], y = 96 - ptQry["y"]),  
+#                         mapping = aes(x = x, y = y), color = "red", shape = 13, size = 5) 
                 }    
                 if (!is.null(patch)) {
                     gp <- gp + geom_rect(data = data.frame(
@@ -1818,13 +1840,14 @@ if (length(names(glbFeatsImage)) > 0) {
         #obsIx=1; jnk <- mygetImage(obsIx, feat, plot = TRUE, ptFeat = c(x = glbObsAll[obsIx, "left_eye_center_x"], y = glbObsAll[obsIx, "left_eye_center_y"]), ptQry = c(x = 6, y = 6), patch = c(xmin = 4, xmax = 8, ymin = 4, ymax = 8))
 
         extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
-                                                    paste0("extract.features.image", ".", feat, ".display"), 
+                                            paste0("extract.features.image", ".", feat, ".display"), 
                                                         major.inc = TRUE)
         
         for (src in unique(glbObsAll$.src)) {
             print(sprintf("    Sample images from %s:%s", src, feat))
             # glbObsAll is sorted by .src rather than .pos
-            # smpl <- sample(glbObsAll[glbObsAll$.src == src, ".pos"], 5)
+            # obsIx=sample(glbObsAll[glbObsAll$.src == "Train", ".pos"], 1)
+            set.seed(lclImageSampleSeed) 
             smpl <- 1:nrow(glbObsAll)
             smpl <- sample(smpl[glbObsAll$.src == src], 5)
             for (obsIx in smpl) {
@@ -1841,9 +1864,20 @@ if (length(names(glbFeatsImage)) > 0) {
             }    
         }
         
+        # Data fixes
+        glbObsFix <- c("Train#1878","Train#1908")
+        for (id in glbObsFix) {
+            print(sprintf("Fixing data for image: %s: obsIx:%d", id, 
+                          obsIx <- which(glbObsAll[, glbFeatsId] == id)))
+            jnk <- mygetImage(obsIx, feat, plot = TRUE, 
+                              ptFeat = c(x = glbObsAll[obsIx, "left_eye_center_x"],
+                                         y = glbObsAll[obsIx, "left_eye_center_y"]))
+            glbObsAll[obsIx, c("left_eye_center_x", "left_eye_center_y")] <- NA
+        }
+        
         if (!is.null(glbFeatsImage[[feat]]$patchSize)) {
             extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
-                                                    paste0("extract.features.image", ".", feat, ".patch"), 
+                                        paste0("extract.features.image", ".", feat, ".patch.mean"), 
                                                             major.inc = TRUE)
             
             #crdX <- paste(glb_rsp_var, "x", sep = "_") glb_rsp_var == "left_eye_center_x"
@@ -1878,6 +1912,11 @@ if (length(names(glbFeatsImage)) > 0) {
             image(1:patchEdgeLength, 1:patchEdgeLength,
                   glbFeatsImage[[feat]]$meanPatchMtrx[patchEdgeLength:1, patchEdgeLength:1],
                   col = gray((0:255) / 255))
+            rm(patches)
+            
+            extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
+                                        paste0("extract.features.image", ".", feat, ".patch.search"),
+                                                            major.inc = TRUE)
             
             searchSize <- 2
             # Compute, Inspect & Output TrnPatches
@@ -1893,15 +1932,17 @@ if (length(names(glbFeatsImage)) > 0) {
             meanXY <- c(x = mean(glbObsAll[glbObsAll$.src == "Train", crdX], na.rm = TRUE),
                         y = mean(glbObsAll[glbObsAll$.src == "Train", crdY], na.rm = TRUE))
 
-            tmpObsAll <- glbObsAll[, c(glbFeatsId, "left_eye_center_x", "left_eye_center_y")] %>%
-                dplyr::mutate(left_eye_center_x.int = as.integer(left_eye_center_x),
-                              left_eye_center_y.int = as.integer(left_eye_center_y)) %>%
-                dplyr::select(ImageId, left_eye_center_x.int, left_eye_center_y.int)
+            require(proxy)
+            tmpObsAll <- glbObsAll[, c(glbFeatsId, "left_eye_center_x", "left_eye_center_y")]
+#                 dplyr::mutate(left_eye_center_x.int = as.integer(left_eye_center_x),
+#                               left_eye_center_y.int = as.integer(left_eye_center_y)) %>%
+#                 dplyr::select(ImageId, left_eye_center_x.int, left_eye_center_y.int)
             startTm <- proc.time()["elapsed"]
             outObs <- 
                 foreach(obsIx = c(1:nrow(glbObsAll)), 
                 # foreach(obsIx = sample(c(1:nrow(glbObsAll))[glbObsAll$.src == "Train"], 5), 
                 # foreach(obsIx = sample(c(1:nrow(glbObsAll))[glbObsAll$.src == "Test" ], 5), 
+                # obsIx=sample(glbObsAll[glbObsAll$.src == "Train", ".pos"], 1)
                                .combine = rbind) %dopar% {
                     img <- mygetImage(obsIx, feat)
                     patchSize <- glbFeatsImage[[feat]]$patchSize
@@ -1920,18 +1961,25 @@ if (length(names(glbFeatsImage)) > 0) {
                                      max( 1, (y - patchSize)):min(96, (y + patchSize))]
                         if (length(as.vector(p)) != 
                             length(as.vector(glbFeatsImage[[feat]]$meanPatchMtrx)))
-                            patch.cor <- NA else
-                                patch.cor <- cor(as.vector(p),
-                                                 as.vector(glbFeatsImage[[feat]]$meanPatchMtrx))
-                        patch.cor <- ifelse(is.na(patch.cor), 0, patch.cor)
-                        if (is.na(lblXY["x"]) || is.na(lblXY["y"]))
-                            label <- ".none" else
-                        if ((x != lblXY["x"]) || (y != lblXY["y"]))                                
-                            label <- ".none" else
-                            label <- "left_eye_center"
-                        data.frame(x, y, patch.cor, label)
+                            thsPatch <- NULL else {
+                            P.cor <- cor(as.vector(p),
+                                                     as.vector(glbFeatsImage[[feat]]$meanPatchMtrx))
+                            P.mnkSml.1 <- as.vector(proxy::simil(
+                                rbind(as.vector(p), 
+                                      as.vector(glbFeatsImage[[feat]]$meanPatchMtrx)),
+                                                                    method = "Minkowski", p = 1))
+                            if (is.na(lblXY["x"]) || is.na(lblXY["y"]))
+                                label <- ".none" else
+                            if ((x != lblXY["x"]) || (y != lblXY["y"]))  
+                                label <- ".none" else
+                                label <- "left_eye_center"
+                            thsPatch <- data.frame(x, y, P.cor, P.mnkSml.1, label)
+                            # Ensure all metrics are similarity oriented (vs. distance)
+                        }
+                        thsPatch
                     }
-                    thsObsOut <- cbind(tmpObsAll[obsIx, ], thsObs)
+                    if (is.null(thsObs)) thsObsOut <- NULL else
+                        thsObsOut <- cbind(tmpObsAll[obsIx, ], thsObs)
                     #bstIx <- thsObsOut[which.max(thsObsOut$patch.cor), ]; jnk <- mygetImage(obsIx, feat, plot = TRUE, ptFeat = c(x = glbObsAll[obsIx, "left_eye_center_x"], y = glbObsAll[obsIx, "left_eye_center_y"]), ptQry = c(x = bstIx$x, y = bstIx$y))
             }
             print(sprintf("Elapsed time: %f secs", proc.time()["elapsed"] - startTm))
@@ -1941,112 +1989,130 @@ if (length(names(glbFeatsImage)) > 0) {
             outObsNew <- 
                 outObs[outObs[, glbFeatsId] %in% glbObsAll[glbObsAll$.src == "Test" , glbFeatsId], ]
             
-            print("outObsTrn patch.cor Distribution:")
-            print(tapply(outObsTrn[, "patch.cor"], outObsTrn[, "label"], summary))
-            print(myplot_violin(outObsTrn, "patch.cor", xcol_name = "label") + 
-                      facet_wrap(~label, scales = "free_y") + 
-                      ggtitle(sprintf("%s:%s:outObsTrn", feat, "left_eye_center")))
-#             print(myplot_histogram(outObsTrn, "patch.cor") + facet_wrap(~label, scales = "free_y") + 
-#                       ggtitle(sprintf("%s:%s:outObsTrn\n%s", feat, "left_eye_center",
-#                                 paste(names(summary(outObsTrn[, "patch.cor"])), 
-#                             summary(outObsTrn[outObsTrn$label == "left_eye_center", "patch.cor"]), 
-#                             sep = ":", collapse = "; "))))      
+# stop("here"); save.image(file = paste0(glbOut$pfx, "tmp.RData"))            
+
+            extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
+                                 paste0("extract.features.image", ".", feat, ".patch.diagnostics"),
+                                                            major.inc = TRUE)
             
+            metrics <- grep("^P\\.", names(outObsTrn), value = TRUE)
+            
+            print(sprintf("outObsTrn Distribution:"))
+            smmry <- lapply(metrics, function(metric) { 
+                                        tapply(outObsTrn[, metric], outObsTrn[, "label"], summary) })
+            names(smmry) <- metrics; print(smmry)
+            print(myplot_violin(outObsTrn, metrics, xcol_name = "label") + 
+                      #facet_wrap(~object, scales = "free_y") + 
+                      ggtitle(sprintf("%s:%s:outObsTrn", feat, "left_eye_center")))
+            #             print(myplot_histogram(outObsTrn, metric) + facet_wrap(~label, scales = "free_y"))
+            #                       ggtitle(sprintf("%s:%s:outObsTrn\n%s", feat, "left_eye_center",
+            #                                 paste(names(summary(outObsTrn[, metric])), 
+            #                             summary(outObsTrn[outObsTrn$label == "left_eye_center", metric]), 
+            #                             sep = ":", collapse = "; "))))      
+            
+            require(lazyeval) 
             # Plot images with is.na(glbObsTrn$ptFeat) in outObsTrn
             tmpObsTrn <- 
                 glbObsAll[glbObsAll$.src == "Train", 
-                            c(glbFeatsId, "left_eye_center_x", "left_eye_center_y")] %>%
+                          c(glbFeatsId, "left_eye_center_x", "left_eye_center_y")] %>%
                 dplyr::filter(is.na(left_eye_center_x))
             selObsTrn <- 
                 merge(tmpObsTrn[, glbFeatsId, FALSE], outObsTrn, 
-                        by.x = c(glbFeatsId),
-                        by.y = c(glbFeatsId),
-                        all.x = TRUE) %>%
-                dplyr::group_by(ImageId) %>%
-                dplyr::top_n(1, patch.cor)     
+                      by.x = c(glbFeatsId),
+                      by.y = c(glbFeatsId),
+                      all.x = TRUE) %>%
+                dplyr::group_by(ImageId) 
+            bstObsTrn <- foreach(metric = metrics, .combine = rbind) %do%
+                dplyr::filter_(selObsTrn, interp(~(min_rank(desc(var)) <= 1), var = as.name(metric)))
             if (unique(selObsTrn$label) %in% c("left_eye_center"))
                 stop("this should not happen")
             print(sprintf("Sample Images (%d of %d) of is.na(%s.left_eye_center)", 
                           min(10, nrow(tmpObsTrn)), nrow(tmpObsTrn), feat))
             for (id in sort(sample(tmpObsTrn[, glbFeatsId], 10))) {
-                thsObsTrn <- selObsTrn[selObsTrn[, glbFeatsId] == id, ]
+                thsObsTrn <- bstObsTrn[bstObsTrn[, glbFeatsId] == id, ]
                 print(thsObsTrn)
-                jnk <- mygetImage(which(glbObsAll[, glbFeatsId] == id), feat, plot = TRUE, 
-                                ptQry = c(x = thsObsTrn$x, y = thsObsTrn$y))
+                jnk <- mygetImage(obsIx = which(glbObsAll[, glbFeatsId] == id), featImage = feat,
+                                  plot = TRUE, 
+                                  ptQry = data.frame(x = thsObsTrn$x, y = thsObsTrn$y))
             }    
             
-            selObsTrn <- subset(outObsTrn, 
-                                (x == left_eye_center_x.int) & (y == left_eye_center_y.int)) %>%
-                dplyr::arrange(patch.cor)
-
-            # Plot images  with least   10 patch.cor for detection point in outObsTrn
-            print(sprintf("Sample Images of min(%s.left_eye_center)", feat))
-            for (id in head(selObsTrn, 10)[, glbFeatsId]) {
-                thsObsTrn <- selObsTrn[selObsTrn[, glbFeatsId] == id, ]
-                print(thsObsTrn)                
-                thsObsBst <- outObsTrn[outObsTrn[, glbFeatsId] == id, ] %>%
-                    dplyr::top_n(1, patch.cor)
-                print(thsObsBst)                
-                jnk <- mygetImage(which(glbObsAll[, glbFeatsId] == id), feat, plot = TRUE, 
-                                  ptFeat = c(x = thsObsTrn[, "left_eye_center_x.int"],
-                                             y = thsObsTrn[, "left_eye_center_y.int"]),
-                                  ptQry  = c(x = thsObsBst[, "x"],
-                                             y = thsObsBst[, "y"]))
-            }    
+            for (metric in metrics) {
+                selObsTrn <- subset(outObsTrn, 
+                                    (x == left_eye_center_x) & (y == left_eye_center_y)) %>%
+                    dplyr::arrange_(metric)
+    
+                # Plot images  with least & most 10 metric for detection point in outObsTrn
+                for (type in c("min", "max")) {
+                    print(sprintf("Sample Images of %s(%s.left_eye_center.%s)", type, feat, metric))
+                    for (id in switch(type, 
+                                      "min" = head(selObsTrn, 10)[, glbFeatsId],
+                                      "max" = tail(selObsTrn, 10)[, glbFeatsId])) {
+                        thsObsTrn <- selObsTrn[selObsTrn[, glbFeatsId] == id, ]
+                        print(thsObsTrn)                
+                        bstObsTrn <- foreach(metric2 = metrics, .combine = rbind) %do% {
+                            outObsTrn[outObsTrn[, glbFeatsId] == id, ] %>%
+                            dplyr::filter_(interp(~(min_rank(desc(var)) <= 1), var = as.name(metric2)))
+                        }    
+                        print(bstObsTrn)                
+                        jnk <- mygetImage(obsIx = which(glbObsAll[, glbFeatsId] == id), featImage = feat, 
+                                          plot = TRUE, 
+                                          ptFeat = c(x = thsObsTrn[, "left_eye_center_x"],
+                                                     y = thsObsTrn[, "left_eye_center_y"]),
+                                          ptQry  = bstObsTrn[, c("x", "y")])
+                    }
+                }
+            }
             
-            # Plot images  with highest 10 patch.cor for detection point in outObsTrn
-            print(sprintf("Sample Images of max(%s.left_eye_center)", feat))
-            for (id in tail(selObsTrn, 10)[, glbFeatsId]) {
-                thsObsTrn <- selObsTrn[selObsTrn[, glbFeatsId] == id, ]
-                print(thsObsTrn)                
-                thsObsBst <- outObsTrn[outObsTrn[, glbFeatsId] == id, ] %>%
-                    dplyr::top_n(1, patch.cor)
-                print(thsObsBst)                
-                jnk <- mygetImage(which(glbObsAll[, glbFeatsId] == id), feat, plot = TRUE, 
-                                  ptFeat = c(x = thsObsTrn[, "left_eye_center_x.int"],
-                                             y = thsObsTrn[, "left_eye_center_y.int"]),
-                                  ptQry  = c(x = thsObsBst[, "x"],
-                                             y = thsObsBst[, "y"]))
-            }    
-
             write.csv(outObsTrn, paste0(glbOut$pfx, "Train.csv"), row.names = FALSE)
             
-            #savOutObsNew <- outObsNew; all.equal(savOutObsNew, outObsNew)
-            outObsNew <- outObsNew[, c(glbFeatsId, "x", "y", "patch.cor")]
-            print("outObsNew patch.cor Distribution:")
-            print(summary(outObsNew[, "patch.cor"]))
-            print(myplot_violin(outObsNew, "patch.cor") + 
+            print(sprintf("outObsNew Distribution:"))
+            smmry <- lapply(metrics, function(metric) { 
+                                    tapply(outObsNew[, metric], outObsNew[, "label"], summary) })
+            names(smmry) <- metrics; print(smmry)
+            print(myplot_violin(outObsNew, metrics, xcol_name = "label") + 
                       ggtitle(sprintf("%s:%s:outObsNew", feat, "left_eye_center")))
-#             print(myplot_histogram(outObsNew, "patch.cor") + 
-#                       ggtitle(sprintf("%s:%s:outObsNew", feat, "left_eye_center")))
-            
-            selObsNew <- dplyr::group_by(outObsNew, ImageId) %>%
-                dplyr::top_n(1, patch.cor) %>%
-                dplyr::ungroup() %>%
-                dplyr::arrange(patch.cor) 
 
-            # Plot images  with least    10 patch.cor for detection point in outObsNew
-            print(sprintf("Sample Images of min(%s.left_eye_center)", feat))
-            for (id in unlist(head(selObsNew[, glbFeatsId], 10))) {
-                thsObsNew <- selObsNew[selObsNew[, glbFeatsId] == id, ]
-                print(thsObsNew)                
-                jnk <- mygetImage(which(glbObsAll[, glbFeatsId] == id), feat, plot = TRUE, 
-                                  ptQry  = c(x = thsObsNew$x,
-                                             y = thsObsNew$y))
-            }    
+            require(lazyeval) 
+            for (metric in metrics) {
+                selObsNew <- dplyr::group_by(outObsNew, ImageId) %>%
+                    dplyr::filter_(interp(~(min_rank(desc(var)) <= 1), var = as.name(metric))) %>%
+                    dplyr::ungroup() %>%
+                    dplyr::arrange_(metric) %>%
+                    as.data.frame()
+
+                # Plot images  with least & most 10 metric for detection point in outObsNew
+                for (type in c("min", "max")) {
+                    print(sprintf("Sample Images of %s(%s.left_eye_center.%s)", 
+                                  type, feat, metric))
+                    for (id in switch(type, 
+                                      "min" = head(selObsNew, 10)[, glbFeatsId, TRUE],
+                                      "max" = tail(selObsNew, 10)[, glbFeatsId, TRUE])) {
+                        thsObsNew <- selObsNew[selObsNew[, glbFeatsId] == id, ]
+                        print(thsObsNew)                
+                        bstObsNew <- foreach(metric2 = metrics, .combine = rbind) %do% {
+                            outObsNew[outObsNew[, glbFeatsId] == id, ] %>%
+                            dplyr::filter_(interp(~(min_rank(desc(var)) <= 1), 
+                                                  var = as.name(metric2)))
+                        }    
+                        print(bstObsNew)                
+                        jnk <- mygetImage(obsIx = which(glbObsAll[, glbFeatsId] == id), 
+                                          featImage = feat, 
+                                          plot = TRUE, 
+                                          ptFeat = c(x = thsObsNew[, "left_eye_center_x"],
+                                                     y = thsObsNew[, "left_eye_center_y"]),
+                                          ptQry  = bstObsNew[, c("x", "y")])
+                    }
+                }
+            }
             
-            # Plot images  with greatest 10 patch.cor for detection point in outObsNew
-            print(sprintf("Sample Images of max(%s.left_eye_center)", feat))
-            for (id in unlist(tail(selObsNew[, glbFeatsId], 10))) {
-                thsObsNew <- selObsNew[selObsNew[, glbFeatsId] == id, ]
-                print(thsObsNew)                
-                jnk <- mygetImage(which(glbObsAll[, glbFeatsId] == id), feat, plot = TRUE, 
-                                  ptQry  = c(x = thsObsNew$x,
-                                             y = thsObsNew$y))
-            }    
-            
-            write.csv(outObsNew, paste0(glbOut$pfx, "Test.csv"), row.names = FALSE)
+            write.csv(outObsNew[, setdiff(names(outObsNew), 
+                                          c("left_eye_center_x", "left_eye_center_y"))],
+                      paste0(glbOut$pfx, "Test.csv"), row.names = FALSE)
         }    
+        
+        extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
+                                            paste0("extract.features.image", ".", feat, ".end"), 
+                                                            major.inc = TRUE)
     }       
         
     glbObsAll <- glbObsAll[, setdiff(names(glbObsAll), names(glbFeatsImage))]
@@ -4043,6 +4109,8 @@ max_cor_y_x_vars <- orderBy(~ -cor.y.abs,
         subset(glb_feats_df, (exclude.as.feat == 0) & !nzv & !is.cor.y.abs.low & 
                                 is.na(cor.high.X)))[1:2, "id"]
 max_cor_y_x_vars <- max_cor_y_x_vars[!is.na(max_cor_y_x_vars)]
+if (length(max_cor_y_x_vars) < 2)
+    max_cor_y_x_vars <- union(max_cor_y_x_vars, ".pos")
 
 if (!is.null(glb_Baseline_mdl_var)) {
     if ((max_cor_y_x_vars[1] != glb_Baseline_mdl_var) & 
@@ -4357,6 +4425,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 
 ```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
 fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
+# refactor code for outliers / ensure all model runs exclude outliers in this chunk ???
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)
 topindep_var <- NULL; interact_vars <- NULL;
@@ -4462,6 +4531,8 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
     if (!is.null(glbObsFitOutliers[[mdl_id_pfx]])) {
         fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
                                          glbObsFitOutliers[[mdl_id_pfx]]), ]
+        print(sprintf("Outliers removed: %d", nrow(glbObsFit) - nrow(fitobs_df)))
+        print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
     } else fitobs_df <- glbObsFit
 
     if (is.null(glbMdlFamilies[[mdl_id_pfx]]))
@@ -4524,6 +4595,9 @@ mdl_id_pfx <- paste0(head(unlist(strsplit(mdl_id, "[.]")), -1), collapse = ".")
 if (!is.null(glbObsFitOutliers[[mdl_id_pfx]])) {
     fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
                                      glbObsFitOutliers[[mdl_id_pfx]]), ]
+        print(sprintf("Outliers removed: %d", nrow(glbObsFit) - nrow(fitobs_df)))
+        print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
+    
 } else fitobs_df <- glbObsFit
 
 for (prePr in glb_preproc_methods) {   
@@ -5318,9 +5392,13 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
 
     mdl_id_pfx <- ifelse(grepl("Ensemble", glb_sel_mdl_id),
                                    "Final.Ensemble", "Final")
-    trnobs_df <- if (is.null(glbObsTrnOutliers[[mdl_id_pfx]])) glbObsTrn else 
-        glbObsTrn[!(glbObsTrn[, glbFeatsId] %in%
-                            glbObsTrnOutliers[[mdl_id_pfx]]), ]
+    
+    trnobs_df <- glbObsTrn 
+    if (!is.null(glbObsTrnOutliers[[mdl_id_pfx]])) {
+        trnobs_df <- glbObsTrn[!(glbObsTrn[, glbFeatsId] %in% glbObsTrnOutliers[[mdl_id_pfx]]), ]
+        print(sprintf("Outliers removed: %d", nrow(glbObsTrn) - nrow(trnobs_df)))
+        print(setdiff(glbObsTrn[, glbFeatsId], trnobs_df[, glbFeatsId]))
+    }    
         
     # Force fitting of Final.glm to identify outliers
     method_vctr <- unique(c(myparseMdlId(glb_sel_mdl_id)$alg, glbMdlFamilies[["Final"]]))
