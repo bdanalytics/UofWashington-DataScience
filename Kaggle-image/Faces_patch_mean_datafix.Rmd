@@ -207,6 +207,7 @@ glb_map_rsp_var_to_raw <- NULL
 #     return(10 ^ var) 
 #     return(-log(var) * 2)
 #     as.numeric(var)
+#     levels(var)[as.numeric(var)]
 #     gsub("\\.", " ", levels(var)[as.numeric(var)])
 #     c("<=50K", " >50K")[as.numeric(var)]
 #     c(FALSE, TRUE)[as.numeric(var)]
@@ -672,15 +673,20 @@ glbRFESizes <- list()
 glbObsFitOutliers <- list()
 # If outliers.n >= 10; consider concatenation of interaction vars
 # glbObsFitOutliers[["<mdlFamily>"]] <- c(NULL
-    # is.na(.rstudent)
-    # is.na(.dffits)
-    # .hatvalues >= 0.99        
-    # -38,167,642 < minmax(.rstudent) < 49,649,823    
+#     is.na(.rstudent)
+#     max(.rstudent)
+#     is.na(.dffits)
+#     .hatvalues >= 0.99        
+#     -38,167,642 < minmax(.rstudent) < 49,649,823    
 #     , <comma-separated-<glbFeatsId>>
 #                                     )
 glbObsTrnOutliers <- list()
+glbObsTrnOutliers[["Final"]] <- union(glbObsFitOutliers[["All.X"]],
+                                c(NULL
+                                ))
 
 # influence.measures: car::outlier; rstudent; dffits; hatvalues; dfbeta; dfbetas
+#mdlId <- "All.X##rcv#glm"; obs_df <- fitobs_df
 #mdlId <- "RFE.X.glm"; obs_df <- fitobs_df
 #mdlId <- "Final.glm"; obs_df <- trnobs_df
 #mdlId <- "CSM2.X.glm"; obs_df <- fitobs_df
@@ -688,6 +694,7 @@ glbObsTrnOutliers <- list()
 #mdlIdFamily <- paste0(head(unlist(str_split(mdlId, "\\.")), -1), collapse="."); obs_df <- dplyr::filter_(obs_df, interp(~(!(var %in% glbObsFitOutliers[[mdlIdFamily]])), var = as.name(glbFeatsId))); model_diags_df <- cbind(obs_df, data.frame(.rstudent=stats::rstudent(glb_models_lst[[mdlId]]$finalModel)), data.frame(.dffits=stats::dffits(glb_models_lst[[mdlId]]$finalModel)), data.frame(.hatvalues=stats::hatvalues(glb_models_lst[[mdlId]]$finalModel)));print(summary(model_diags_df[, c(".rstudent",".dffits",".hatvalues")])); table(cut(model_diags_df$.hatvalues, breaks=c(0.00, 0.98, 0.99, 1.00)))
 
 #print(subset(model_diags_df, is.na(.rstudent))[, glbFeatsId])
+#print(model_diags_df[which.max(model_diags_df$.rstudent), ])
 #print(subset(model_diags_df, is.na(.dffits))[, glbFeatsId])
 #print(model_diags_df[which.min(model_diags_df$.dffits), ])
 #print(subset(model_diags_df, .hatvalues > 0.99)[, glbFeatsId])
@@ -968,7 +975,7 @@ glbOutStackFnames <- NULL #: default
     # c("ebayipads_finmdl_bid1_out_nnet_1.csv") # universal stack
 
 glbOut <- list(pfx = "Faces_patch_mean_datafix_")
-lclImageSampleSeed <- 129
+lclImageSampleSeed <- 135
 glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
 
 
@@ -1785,7 +1792,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.image", major.inc 
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
 # ```{r extract.features.image, cache=FALSE, echo=FALSE, fig.height=5, fig.width=5, eval=myevlChunk(glbChunks, glbOut$pfx)}
-```{r extract.features.image, cache=FALSE, echo=TRUE, eval=myevlChunk(glbChunks, glbOut$pfx)}
+```{r extract.features.image, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 extract.features.image.chunk.df <- myadd_chunk(NULL, "extract.features.image.bgn")
 
 if (length(names(glbFeatsImage)) > 0) {
@@ -1819,7 +1826,9 @@ if (length(names(glbFeatsImage)) > 0) {
                         mapping = aes(x = x, y = y), color = "blue", shape = 10, size = 5) 
                 }    
                 if (!is.null(ptQry)) {
-                    if (!is.data.frame(ptQry)) ptQry <- as.data.frame(ptQry)
+                    if (!is.data.frame(ptQry)) {
+                        ptQry <- as.data.frame(matrix(ptQry, nrow = 1, dimnames = list(NULL, names(ptQry))))
+                    }    
                     gp <- gp + geom_point(data = ptQry,  
                         mapping = aes(x = 96 - x, y = 96 - y), color = "red", shape = 13, size = 5) 
 #                     gp <- gp + geom_point(data = data.frame(
@@ -1837,7 +1846,9 @@ if (length(names(glbFeatsImage)) > 0) {
             }    
             return(img)
         }
-        #obsIx=1; jnk <- mygetImage(obsIx, feat, plot = TRUE, ptFeat = c(x = glbObsAll[obsIx, "left_eye_center_x"], y = glbObsAll[obsIx, "left_eye_center_y"]), ptQry = c(x = 6, y = 6), patch = c(xmin = 4, xmax = 8, ymin = 4, ymax = 8))
+        #obsIx=8822; jnk <- mygetImage(obsIx, feat, plot = TRUE, ptFeat = c(x = glbObsAll[obsIx, "left_eye_center_x"], y = glbObsAll[obsIx, "left_eye_center_y"]), ptQry = c(x = 6, y = 6), patch = c(xmin = 4, xmax = 8, ymin = 4, ymax = 8))
+        #obsIx=8822; jnk <- mygetImage(obsIx, feat, plot = TRUE, ptFeat = c(x = glbObsAll[obsIx, "left_eye_center_x"], y = glbObsAll[obsIx, "left_eye_center_y"]), ptQry = c(x = 67, y = 39))
+        #tstIx=7039+1738; jnk <- mygetImage(tstIx, feat, plot = TRUE, ptFeat = c(x = meanX, y = meanY), ptQry = c(x = 63, y = 36))
 
         extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
                                             paste0("extract.features.image", ".", feat, ".display"), 
@@ -1907,6 +1918,8 @@ if (length(names(glbFeatsImage)) > 0) {
             patchEdgeLength = 2 * glbFeatsImage[[feat]]$patchSize + 1
             glbFeatsImage[[feat]]$meanPatchMtrx <- 
                 matrix(data = colMeans(patches), nrow = patchEdgeLength, ncol = patchEdgeLength)
+            glbFeatsImage[[feat]]$meanPatchVctr <- as.vector(glbFeatsImage[[feat]]$meanPatchMtrx)
+            glbFeatsImage[[feat]]$meanPatchVctrLen <- length(glbFeatsImage[[feat]]$meanPatchVctr)
             print(sprintf("    Mean patch (size = %d) for %s:%s", 
                           glbFeatsImage[[feat]]$patchSize, feat, "left_eye_center"))
             image(1:patchEdgeLength, 1:patchEdgeLength,
@@ -1920,12 +1933,22 @@ if (length(names(glbFeatsImage)) > 0) {
             
             searchSize <- 2
             # Compute, Inspect & Output TrnPatches
-            mygetImageSearchSpace <- function(searchCenter, searchSize) {
-                x1    <- as.integer(searchCenter["x"]) - searchSize
-                x2    <- as.integer(searchCenter["x"]) + searchSize
-                y1    <- as.integer(searchCenter["y"]) - searchSize
-                y2    <- as.integer(searchCenter["y"]) + searchSize
-                return(searchSpace <- expand.grid(x = x1:x2, y = y1:y2))
+            mygetImageSearchSpace <- function(searchCenter, searchSize, sparse = FALSE) {
+                xMin    <- as.integer(searchCenter["x"]) - searchSize
+                xMax    <- as.integer(searchCenter["x"]) + searchSize
+                yMin    <- as.integer(searchCenter["y"]) - searchSize
+                yMax    <- as.integer(searchCenter["y"]) + searchSize
+                searchSpace <- expand.grid(x = xMin:xMax, y = yMin:yMax)
+                
+                if (sparse) {
+                    # Restrict search to corners & center
+                    searchSpace <- subset(searchSpace, 
+                                            ((x == searchCenter["x"]) & (y == searchCenter["y"])) |
+                                            (((x == xMin) | (x == xMax)) &
+                                             ((y == yMin) | (y == yMax)))
+                                        )
+                }
+                return(searchSpace)
             }
             #print(mygetImageSearchSpace(searchCenter = c(x = glbObsAll[obsIx, "left_eye_center_x"], y = glbObsAll[obsIx, "left_eye_center_y"]), searchSize = 2))
 
@@ -1937,9 +1960,11 @@ if (length(names(glbFeatsImage)) > 0) {
 #                 dplyr::mutate(left_eye_center_x.int = as.integer(left_eye_center_x),
 #                               left_eye_center_y.int = as.integer(left_eye_center_y)) %>%
 #                 dplyr::select(ImageId, left_eye_center_x.int, left_eye_center_y.int)
+#savOutObs <- outObs; all.equal(savOutObs, outObs)
             startTm <- proc.time()["elapsed"]
             outObs <- 
-                foreach(obsIx = c(1:nrow(glbObsAll)), 
+                foreach(obsIx = c(1:(nrow(glbObsAll) / 1)), 
+                        
                 # foreach(obsIx = sample(c(1:nrow(glbObsAll))[glbObsAll$.src == "Train"], 5), 
                 # foreach(obsIx = sample(c(1:nrow(glbObsAll))[glbObsAll$.src == "Test" ], 5), 
                 # obsIx=sample(glbObsAll[glbObsAll$.src == "Train", ".pos"], 1)
@@ -1953,27 +1978,33 @@ if (length(names(glbFeatsImage)) > 0) {
                         searchSpace <- mygetImageSearchSpace(searchCenter = meanXY, 
                                                              searchSize = searchSize) else
                         searchSpace <- mygetImageSearchSpace(searchCenter = lblXY, 
-                                                             searchSize = searchSize)
+                                                             searchSize = searchSize, sparse = TRUE)
                     thsObs <- foreach(j = 1:nrow(searchSpace), .combine = rbind) %dopar% {
                         x     <- searchSpace$x[j]
                         y     <- searchSpace$y[j]
                         p     <- img[max( 1, (x - patchSize)):min(96, (x + patchSize)), 
                                      max( 1, (y - patchSize)):min(96, (y + patchSize))]
-                        if (length(as.vector(p)) != 
-                            length(as.vector(glbFeatsImage[[feat]]$meanPatchMtrx)))
+                        pVctr <- as.vector(p)
+                        if (length(pVctr) != glbFeatsImage[[feat]]$meanPatchVctrLen)
                             thsPatch <- NULL else {
-                            P.cor <- cor(as.vector(p),
-                                                     as.vector(glbFeatsImage[[feat]]$meanPatchMtrx))
-                            P.mnkSml.1 <- as.vector(proxy::simil(
-                                rbind(as.vector(p), 
-                                      as.vector(glbFeatsImage[[feat]]$meanPatchMtrx)),
-                                                                    method = "Minkowski", p = 1))
+                            P.cor <- cor(pVctr, glbFeatsImage[[feat]]$meanPatchVctr)
+                            smlMtrx <- rbind(pVctr, glbFeatsImage[[feat]]$meanPatchVctr)
+                            P.mnkSml.1 <- as.vector(proxy::simil(smlMtrx,
+                                                                method = "Minkowski", p = 1))
+                            P.mnkSml.2 <- as.vector(proxy::simil(smlMtrx,
+                                                                method = "Minkowski", p = 2))
+                            P.mnkSml.3 <- as.vector(proxy::simil(smlMtrx,
+                                                                method = "Minkowski", p = 3))
+                            P.cosSml   <- as.vector(proxy::simil(smlMtrx,
+                                                                method = "cosine"))
                             if (is.na(lblXY["x"]) || is.na(lblXY["y"]))
                                 label <- ".none" else
                             if ((x != lblXY["x"]) || (y != lblXY["y"]))  
                                 label <- ".none" else
                                 label <- "left_eye_center"
-                            thsPatch <- data.frame(x, y, P.cor, P.mnkSml.1, label)
+                            thsPatch <- data.frame(x, y 
+                                                   ,P.cor,P.mnkSml.1,P.mnkSml.2,P.mnkSml.3,P.cosSml
+                                                   ,label)
                             # Ensure all metrics are similarity oriented (vs. distance)
                         }
                         thsPatch
@@ -1984,12 +2015,14 @@ if (length(names(glbFeatsImage)) > 0) {
             }
             print(sprintf("Elapsed time: %f secs", proc.time()["elapsed"] - startTm))
             
+            # print(cor(outObs[, setdiff(names(outObs), c(glbFeatsId, "x", "y", "label"))]))
+            print(cor(outObs[, grep("^P\\.", names(outObs), value = TRUE)]))            
             outObsTrn <- 
                 outObs[outObs[, glbFeatsId] %in% glbObsAll[glbObsAll$.src == "Train", glbFeatsId], ]
             outObsNew <- 
                 outObs[outObs[, glbFeatsId] %in% glbObsAll[glbObsAll$.src == "Test" , glbFeatsId], ]
             
-# stop("here"); save.image(file = paste0(glbOut$pfx, "tmp.RData"))            
+#stop(here"); save.image(file = paste0(glbOut$pfx, "tmp.RData"))            
 
             extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
                                  paste0("extract.features.image", ".", feat, ".patch.diagnostics"),
@@ -2105,8 +2138,8 @@ if (length(names(glbFeatsImage)) > 0) {
                 }
             }
             
-            write.csv(outObsNew[, setdiff(names(outObsNew), 
-                                          c("left_eye_center_x", "left_eye_center_y"))],
+            write.csv(outObsNew[, setdiff(names(outObsNew), c("label",
+                                          "left_eye_center_x", "left_eye_center_y"))],
                       paste0(glbOut$pfx, "Test.csv"), row.names = FALSE)
         }    
         
