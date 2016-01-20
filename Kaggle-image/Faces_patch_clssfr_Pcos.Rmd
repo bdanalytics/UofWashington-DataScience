@@ -821,16 +821,17 @@ glbMdlFamilies[["All.X"]] <- c("glmnet")  # non-NULL vector is mandatory
 #                                   )
 # glb_mdl_feats_lst[["CSM.X"]] <- "%<d-% dAFeats.CSM.X"
 
-glbMdlFamilies[["Final"]] <- c(NULL) # NULL vector acceptable
+glbMdlFamilies[["Final"]] <- c("glmnet", "glm") # c(NULL) # NULL vector acceptable
 
 glbMdlAllowParallel <- list()
 #glbMdlAllowParallel[["<mdlId>"]] <- FALSE
 glbMdlAllowParallel[["Max.cor.Y##rcv#rpart"]] <- FALSE
-glbMdlAllowParallel[["Low.cor.X##rcv#glmnet"]] <- FALSE
 glbMdlAllowParallel[["Interact.High.cor.Y##rcv#glmnet"]] <- FALSE
+glbMdlAllowParallel[["Low.cor.X##rcv#glmnet"]] <- FALSE
 glbMdlAllowParallel[["All.X##rcv#glmnet"]] <- FALSE
-glbMdlAllowParallel[["All.X##rcv#glm"]] <- FALSE
+# glbMdlAllowParallel[["All.X##rcv#glm"]] <- FALSE
 glbMdlAllowParallel[["Final##rcv#glmnet"]] <- FALSE
+glbMdlAllowParallel[["Final##rcv#glm"]] <- FALSE
 
 # Check if tuning parameters make fit better; make it mdlFamily customizable ?
 glbMdlTuneParams <- data.frame()
@@ -982,13 +983,32 @@ lclgetfltout_df <- function(obsout_df) {
     obsout_df <- obsout_df %>%
         tidyr::separate("ImageId.x.y", c(".src", ".pos", "x", "y"), 
                         sep = "#", remove = TRUE, extra = "merge")
+    # mnm prefix stands for max_n_mean
+    mnmout_df <- obsout_df %>%
+        dplyr::group_by(.pos) %>%
+        #dplyr::top_n(1, Probability1) %>% # Score = 3.9426         
+        #dplyr::top_n(2, Probability1) %>% # Score = ???; weighted = 3.94254;         
+        #dplyr::top_n(3, Probability1) %>% # Score = 3.9418; weighted = 3.94169; 
+        dplyr::top_n(4, Probability1) %>% # Score = ???; weighted = 3.94149;        
+        #dplyr::top_n(5, Probability1) %>% # Score = 3.9421; weighted = 3.94178
+    
+        # dplyr::summarize(xMeanN = mean(as.numeric(x)), yMeanN = mean(as.numeric(y)))
+        # dplyr::summarize(xMeanN = weighted.mean(as.numeric(x), Probability1), yMeanN = mean(as.numeric(y)))
+        # dplyr::summarize(xMeanN = weighted.mean(as.numeric(x), c(Probability1, 0.2357323, 0.2336925)), yMeanN = mean(as.numeric(y)))    
+        # dplyr::summarize(xMeanN = weighted.mean(as.numeric(x), c(Probability1)), yMeanN = mean(as.numeric(y)))
+        dplyr::summarize(xMeanN = weighted.mean(as.numeric(x), c(Probability1)), 
+                         yMeanN = weighted.mean(as.numeric(y), c(Probability1)))  
+    
     maxout_df <- obsout_df %>%
         dplyr::group_by(.pos) %>%
         dplyr::summarize(maxProb1 = max(Probability1))
     fltout_df <- merge(maxout_df, obsout_df, 
                        by.x = c(".pos", "maxProb1"), by.y = c(".pos", "Probability1"),
                        all.x = TRUE)
-    return(fltout_df)
+    fmnout_df <- merge(fltout_df, mnmout_df, 
+                       by.x = c(".pos"), by.y = c(".pos"),
+                       all.x = TRUE)
+    return(fmnout_df)
 }
 glbObsOut <- list(NULL
         # glbFeatsId will be the first output column, by default
@@ -1006,7 +1026,7 @@ glbObsOut <- list(NULL
                     #sav_obsout_df <- obsout_df; all.equal(sav_obsout_df, obsout_df)
                     fltout_df <- lclgetfltout_df(obsout_df) %>%
                         dplyr::mutate(ImageId = as.integer(.pos)) %>%
-                        dplyr::select(ImageId, left_eye_center_x = x, left_eye_center_y = y) 
+                        dplyr::select(ImageId, left_eye_center_x = xMeanN, left_eye_center_y = yMeanN) 
                     smpout_df <- read.csv('data/IdLookupTable.csv')
                     curout_df <- fltout_df %>% 
                                     tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
@@ -4234,11 +4254,11 @@ if (glb_is_classification) {
                                         label.minor = "myrandom_classfr")
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)    
-#     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
-#         id.prefix = "Random", type = glb_model_type, trainControl.method = "none",
-#         train.method = "myrandom_classfr")),
-#                         indep_vars = ".rnorm", rsp_var = glb_rsp_var,
-#                         fit_df = glbObsFit, OOB_df = glbObsOOB)
+    ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+        id.prefix = "Random", type = glb_model_type, trainControl.method = "none",
+        train.method = "myrandom_classfr")),
+                        indep_vars = ".rnorm", rsp_var = glb_rsp_var,
+                        fit_df = glbObsFit, OOB_df = glbObsOOB)
 }
 
 # Max.cor.Y
@@ -4248,11 +4268,11 @@ fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df,
                         paste0("fit.models_0_", "Max.cor.Y.rcv.*X*"), major.inc = FALSE,
                                     label.minor = "glmnet")
 
-# ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
-#     id.prefix="Max.cor.Y.rcv.1X1", type=glb_model_type, trainControl.method="none",
-#     train.method="glmnet")),
-#                     indep_vars=max_cor_y_x_vars, rsp_var=glb_rsp_var, 
-#                     fit_df=glbObsFit, OOB_df=glbObsOOB)
+ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
+    id.prefix="Max.cor.Y.rcv.1X1", type=glb_model_type, trainControl.method="none",
+    train.method="glmnet")),
+                    indep_vars=max_cor_y_x_vars, rsp_var=glb_rsp_var, 
+                    fit_df=glbObsFit, OOB_df=glbObsOOB)
 
 if (glbMdlCheckRcv) {
     # rcv_n_folds == 1 & rcv_n_repeats > 1 crashes
@@ -4466,26 +4486,26 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
 }    
 
 # Low.cor.X
-# fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
-#                         paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
-#                                      label.minor = "glmnet")
-# indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
-#                               (exclude.as.feat != 1))[, "id"]  
-# indep_vars <- myadjust_interaction_feats(indep_vars)
-# ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
-#             id.prefix = "Low.cor.X", 
-#             type = glb_model_type, 
-#             tune.df = glbMdlTuneParams,        
-#             trainControl.method = "repeatedcv",
-#             trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
-#             trainControl.classProbs = glb_is_classification,
-#             trainControl.summaryFunction = glbMdlMetricSummaryFn,
-#             trainControl.allowParallel = glbMdlAllowParallel,
-#             train.metric = glbMdlMetricSummary, 
-#             train.maximize = glbMdlMetricMaximize,    
-#             train.method = "glmnet")),
-#         indep_vars = indep_vars, rsp_var = glb_rsp_var, 
-#         fit_df = glbObsFit, OOB_df = glbObsOOB)
+fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
+                        paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
+                                     label.minor = "glmnet")
+indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
+                              (exclude.as.feat != 1))[, "id"]  
+indep_vars <- myadjust_interaction_feats(indep_vars)
+ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+            id.prefix = "Low.cor.X", 
+            type = glb_model_type, 
+            tune.df = glbMdlTuneParams,        
+            trainControl.method = "repeatedcv",
+            trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
+            trainControl.classProbs = glb_is_classification,
+            trainControl.summaryFunction = glbMdlMetricSummaryFn,
+            trainControl.allowParallel = glbMdlAllowParallel,
+            train.metric = glbMdlMetricSummary, 
+            train.maximize = glbMdlMetricMaximize,    
+            train.method = "glmnet")),
+        indep_vars = indep_vars, rsp_var = glb_rsp_var, 
+        fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 fit.models_0_chunk_df <- 
     myadd_chunk(fit.models_0_chunk_df, "fit.models_0_end", major.inc = FALSE,
@@ -5356,7 +5376,7 @@ print(setdiff(names(glbObsNew), names(glbObsAll)))
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
         "model.selected")), flip_coord=TRUE)
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc=TRUE)
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc = TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
@@ -5497,12 +5517,13 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
                     train.preProcess = ths_preProcess)),
                 indep_vars = indep_vars_vctr, rsp_var = glb_rsp_var, 
                 fit_df = trnobs_df, OOB_df = NULL)
+        
+        if ((length(method_vctr) == 1) || (method != "glm")) {
+            glb_fin_mdl <- glb_models_lst[[length(glb_models_lst)]] 
+            glb_fin_mdl_id <- glb_models_df[length(glb_models_lst), "id"]
+        }
     }
         
-    if ((length(method_vctr) == 1) || (method != "glm")) {
-        glb_fin_mdl <- glb_models_lst[[length(glb_models_lst)]] 
-        glb_fin_mdl_id <- glb_models_df[length(glb_models_lst), "id"]
-    }
 }
 
 rm(ret_lst)

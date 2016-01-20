@@ -4415,10 +4415,11 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
         id.prefix="Interact.High.cor.Y", 
         type=glb_model_type, trainControl.method="repeatedcv",
         trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
-            trainControl.classProbs = glb_is_classification,
-            trainControl.summaryFunction = glbMdlMetricSummaryFn,
-            train.metric = glbMdlMetricSummary, 
-            train.maximize = glbMdlMetricMaximize,    
+        trainControl.classProbs = glb_is_classification,
+        trainControl.summaryFunction = glbMdlMetricSummaryFn,
+        trainControl.allowParallel = glbMdlAllowParallel,
+        train.metric = glbMdlMetricSummary, 
+        train.maximize = glbMdlMetricMaximize,    
         train.method="glmnet")),
         indep_vars=c(max_cor_y_x_vars, paste(max_cor_y_x_vars[1], int_feats, sep=":")),
         rsp_var=glb_rsp_var, 
@@ -4432,19 +4433,19 @@ fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df,
 indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
                               (exclude.as.feat != 1))[, "id"]  
 indep_vars <- myadjust_interaction_feats(indep_vars)
-ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
-        id.prefix="Low.cor.X", 
-        type=glb_model_type, 
-        tune.df = glbMdlTuneParams,        
-        trainControl.method="repeatedcv",
-        trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
+ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+            id.prefix = "Low.cor.X", 
+            type = glb_model_type, 
+            tune.df = glbMdlTuneParams,        
+            trainControl.method = "repeatedcv",
+            trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
             trainControl.classProbs = glb_is_classification,
             trainControl.summaryFunction = glbMdlMetricSummaryFn,
             trainControl.allowParallel = glbMdlAllowParallel,
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
-        train.method="glmnet")),
-        indep_vars=indep_vars, rsp_var=glb_rsp_var, 
+            train.method = "glmnet")),
+        indep_vars = indep_vars, rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 fit.models_0_chunk_df <- 
@@ -5316,7 +5317,7 @@ print(setdiff(names(glbObsNew), names(glbObsAll)))
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
         "model.selected")), flip_coord=TRUE)
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc=TRUE)
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc = TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
@@ -5457,12 +5458,13 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
                     train.preProcess = ths_preProcess)),
                 indep_vars = indep_vars_vctr, rsp_var = glb_rsp_var, 
                 fit_df = trnobs_df, OOB_df = NULL)
+        
+        if ((length(method_vctr) == 1) || (method != "glm")) {
+            glb_fin_mdl <- glb_models_lst[[length(glb_models_lst)]] 
+            glb_fin_mdl_id <- glb_models_df[length(glb_models_lst), "id"]
+        }
     }
         
-    if ((length(method_vctr) == 1) || (method != "glm")) {
-        glb_fin_mdl <- glb_models_lst[[length(glb_models_lst)]] 
-        glb_fin_mdl_id <- glb_models_df[length(glb_models_lst), "id"]
-    }
 }
 
 rm(ret_lst)
